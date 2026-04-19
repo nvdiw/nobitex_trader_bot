@@ -38,7 +38,7 @@ def get_market_history_symbol(symbol: str = "BTCUSDT", fromm= 1775867700, to= 17
         return None
 
 def main():
-    current_ts, past_ts = get_current_and_past_timestamps()
+    current_ts, past_ts = get_current_and_past_timestamps(days_ago=1)
     symbol_ohlcv_data = get_market_history_symbol(symbol= symbol, fromm= past_ts, to= current_ts)
     database_process_symbol_data(data=symbol_ohlcv_data, db_file='database.db', symbol=symbol)
 

@@ -1,6 +1,6 @@
 import datetime
 
-def get_current_and_past_timestamps():
+def get_current_and_past_timestamps(days_ago=1):
     """
     This function returns the current Unix timestamp and the timestamp for exactly 24 hours ago.
 
@@ -12,7 +12,7 @@ def get_current_and_past_timestamps():
     current_timestamp = int(now.timestamp())
 
     # Calculate the time exactly 24 hours ago
-    past_time = now - datetime.timedelta(days=1)
+    past_time = now - datetime.timedelta(days=days_ago)
     past_timestamp = int(past_time.timestamp())
 
     return current_timestamp, past_timestamp

@@ -97,5 +97,48 @@ def database_process_symbol_data(data, db_file='database.db', symbol="BTCUSDT"):
     conn.close()
 
     total = new_count + old_count
-    print(f"Operation completed: {new_count} new, {old_count} old (total {total} records processed)")
+    print(f"Operation completed: {new_count} new, {old_count} old (total {total} records processed) insert to database")
     return True
+
+# get balance from database
+def get_balance_from_db(db_file='database.db', default_balance=100):
+    """
+    Get balance from database. If balance table doesn't exist or no balance record,
+    create it with default value and return default balance.
+    
+    Args:
+        db_file (str): The name of the SQLite database file.
+        default_balance (float): Default balance value if not exists.
+    
+    Returns:
+        float: Current balance
+    """
+    import sqlite3
+    
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    
+    # Create balance table if it doesn't exist
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS balance (
+        id INTEGER PRIMARY KEY CHECK (id = 1),  -- Only one row allowed
+        amount REAL NOT NULL DEFAULT 100
+    )
+    ''')
+    
+    # Check if balance record exists
+    cursor.execute('SELECT amount FROM balance WHERE id = 1')
+    result = cursor.fetchone()
+    
+    if result is None:
+        # No balance record, insert default value
+        cursor.execute('INSERT INTO balance (id, amount) VALUES (1, ?)', (default_balance,))
+        conn.commit()
+        balance = default_balance
+        print(f"Balance table created with default balance: {balance}")
+    else:
+        balance = result[0]
+        # print(f"Current balance: {balance}")
+    
+    conn.close()
+    return balance

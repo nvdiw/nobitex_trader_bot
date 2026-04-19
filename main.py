@@ -4,42 +4,51 @@ import json
 import datetime
 
 # my codes :
-from time_engine import get_current_and_past_timestamps
-from database_engine import database_process_symbol_data
+from time_engine import get_current_and_past_timestamps, timestamp_to_datetime
+from database_engine import database_process_symbol_data, get_balance_from_db
+from nobitex_requests import get_market_history_symbol_nobitex
 
-market_history_url = "https://apiv2.nobitex.ir/market/udf/history"
 symbol = "BTCUSDT"
+db_file='database.db'
 
+# variables:
+variable = {}
+variable["last_price_entry"] = 0
 
-# requests to get some candles data:
-def get_market_history_symbol(symbol: str = "BTCUSDT", fromm= 1775867700, to= 1775954100):
-    '''
-    get market history of symbol that you need in fromm time and to time
-    for example:\n
-        symbol= "BTCUSDT",
-        fromm= "1775867700",
-        to= "1775954100"
-    '''
-    params = {
-        "symbol": symbol,
-        "resolution": "15",
-        "from": fromm,
-        "to": to
-    }
-    try:
-        # requests market history:
-        market_history_response = requests.get(market_history_url, params=params, json={})
-        market_history_data = market_history_response.json()
-        print(f"Data was fetched from Nobitex on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        return market_history_data
-    
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
+open_positions = []
 
+# main strategy
 def main():
+    # setting:
+    balance = 100
+    symbol_change_pct = 0.06
+    more_symbol_change_pct = 0.05
+    max_open_trades = 10
+
     current_ts, past_ts = get_current_and_past_timestamps(days_ago=1)
-    symbol_ohlcv_data = get_market_history_symbol(symbol= symbol, fromm= past_ts, to= current_ts)
-    database_process_symbol_data(data=symbol_ohlcv_data, db_file='database.db', symbol=symbol)
+    symbol_ohlcv_data = get_market_history_symbol_nobitex(symbol= symbol, fromm= past_ts, to= current_ts)
+
+    last_open_time_candle = timestamp_to_datetime(symbol_ohlcv_data["t"][-2])
+    last_close_time_candle = timestamp_to_datetime(symbol_ohlcv_data["t"][-1])
+    last_open_price_candle = symbol_ohlcv_data["o"][-2]
+    last_high_price_candle = symbol_ohlcv_data["h"][-2]
+    last_low_price_candle = symbol_ohlcv_data["l"][-2]
+    last_close_price_candle = symbol_ohlcv_data["c"][-2]
+    last_volume_candle = symbol_ohlcv_data["v"][-2]
+
+    balance = get_balance_from_db(db_file=db_file, default_balance=balance)
+
+    if variable["last_price_entry"] <= last_close_price_candle:
+        variable["last_price_entry"] = last_close_price_candle
+
+    # ===================== OPEN LONG =====================
+    # if (last_close_price_candle <= variable["last_price_entry"] * (1 - symbol_change_pct)) and (len(open_positions) < max_open_trades):
+        # ---- open long in nobitex ----
+
+        # success
+        
+        # inset opened positions in database
+
+    database_process_symbol_data(data=symbol_ohlcv_data, db_file=db_file, symbol=symbol)
 
 main()

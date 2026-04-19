@@ -1,5 +1,6 @@
 import datetime
 
+# get current time and by default 1 day ago
 def get_current_and_past_timestamps(days_ago=1):
     """
     This function returns the current Unix timestamp and the timestamp for exactly 24 hours ago.
@@ -17,7 +18,17 @@ def get_current_and_past_timestamps(days_ago=1):
 
     return current_timestamp, past_timestamp
 
-# # Example usage func: get_current_and_past_timestamps():
-# current_ts, past_ts = get_current_and_past_timestamps()
-# print(f"Current Timestamp: {current_ts}")
-# print(f"Timestamp 24 hours ago: {past_ts}")
+
+# get time with number and returns date/time
+def timestamp_to_datetime(timestamp):
+    """
+    Convert Unix timestamp to readable datetime string.
+    
+    Args:
+        timestamp (int or float): Unix timestamp (e.g., 1776636000)
+    
+    Returns:
+        str: Formatted datetime string (YYYY-MM-DD HH:MM:SS)
+    """
+    import datetime
+    return datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')

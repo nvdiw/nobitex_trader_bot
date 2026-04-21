@@ -1,7 +1,7 @@
 import sqlite3
 import datetime
 
-# save symbol data to data base with symbol name
+# save symbol data to database with symbol name
 def database_process_symbol_data(data, db_file='database.db', symbol="BTCUSDT"):
     """
     Processes stock price data, inserts it into an SQLite database,
@@ -142,3 +142,42 @@ def get_balance_from_db(db_file='database.db', default_balance=100):
     
     conn.close()
     return balance
+
+
+# set balance in database
+def set_balance_in_db(new_balance, db_file='database.db'):
+    """
+    Update balance value in database.
+    
+    Args:
+        new_balance (float): New balance value to set
+        db_file (str): The name of the SQLite database file.
+    
+    Returns:
+        float: The new balance value that was set
+    """
+    import sqlite3
+    
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    
+    # Create balance table if it doesn't exist
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS balance (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        amount REAL NOT NULL DEFAULT 100
+    )
+    ''')
+    
+    # Update or insert balance
+    cursor.execute('''
+    INSERT OR REPLACE INTO balance (id, amount) VALUES (1, ?)
+    ''', (new_balance,))
+    
+    conn.commit()
+    conn.close()
+
+    return new_balance
+
+
+set_balance_in_db(100)

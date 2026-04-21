@@ -19,7 +19,8 @@ load_dotenv()
 # Get NOBITEX_API_KEY from environment
 NOBITEX_API_KEY = os.getenv('NOBITEX_API_KEY')
 
-symbol = "BTCUSDT"
+SYMBOL = "BTCUSDT"
+symbol = "btc"
 db_file='database.db'
 
 default_balance = 100
@@ -47,8 +48,8 @@ nobitex = Nobitex(NOBITEX_API_KEY)
 def limbian_strategy(state):
     # get symbol data and save on database
     current_ts, past_ts = get_current_and_past_timestamps(days_ago=1)
-    symbol_ohlcv_data = nobitex.get_market_history_symbol_nobitex(symbol= symbol, fromm= past_ts, to= current_ts)
-    database_process_symbol_data(data=symbol_ohlcv_data, db_file=db_file, symbol=symbol)
+    symbol_ohlcv_data = nobitex.get_market_history_symbol_nobitex(symbol= SYMBOL, fromm= past_ts, to= current_ts)
+    database_process_symbol_data(data=symbol_ohlcv_data, db_file=db_file, symbol=SYMBOL)
 
     # last candle data
     open_time_candle = timestamp_to_datetime(symbol_ohlcv_data["t"][-2])
@@ -68,7 +69,7 @@ def limbian_strategy(state):
         state.last_price_entry = close_price_candle
 
         # price process for open long
-        orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= symbol)
+        orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= SYMBOL)
         last_asks_order = float(orderbook_data["asks"][0][0])
 
         # amount process for open long
@@ -76,21 +77,18 @@ def limbian_strategy(state):
             order_cost = state.first_balance * state.trade_amount_percent
         else:
             order_cost = state.balance
-
         amount = order_cost / last_asks_order
 
         # ---- open long in nobitex ----
-        order_open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol="btc", amount= amount, price= last_asks_order, id= state.order_code)
+        order_open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol=symbol, amount= amount, price= last_asks_order, id= state.order_code)
         # success
         if order_open_long_data is not None:
             increment_order_code(state.order_code)
             state.balance -= order_cost
             set_balance_in_db(state.balance)
             print(f"order set: symbol: {order_open_long_data["order"]["srcCurrency"]} price: {order_open_long_data["order"]["price"]} order_size: {order_open_long_data["order"]["amount"]}")
-        
-        
         # inset opened positions in database
-
+        
     
 
 

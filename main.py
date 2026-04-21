@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 # my codes :
 from time_engine import get_current_and_past_timestamps, timestamp_to_datetime
-from database_engine import database_process_symbol_data, get_balance_from_db
-from nobitex_requests import get_market_history_symbol_nobitex, get_orderbook_symbol_nobitex, symbol_wallet_balance_nobitex, open_order_symbol_nobitex
+from database_engine import database_process_symbol_data, get_balance_from_db, set_balance_in_db
+from nobitex_requests import Nobitex
 from order_code import increment_order_code
 
 # environment process
@@ -41,12 +41,13 @@ class BotState_limbian_strategy:
 
 BOT_STATE = BotState_limbian_strategy()
 
+nobitex = Nobitex(NOBITEX_API_KEY)
 
 # main limbian_strategy
 def limbian_strategy(state):
     # get symbol data and save on database
     current_ts, past_ts = get_current_and_past_timestamps(days_ago=1)
-    symbol_ohlcv_data = get_market_history_symbol_nobitex(symbol= symbol, fromm= past_ts, to= current_ts)
+    symbol_ohlcv_data = nobitex.get_market_history_symbol_nobitex(symbol= symbol, fromm= past_ts, to= current_ts)
     database_process_symbol_data(data=symbol_ohlcv_data, db_file=db_file, symbol=symbol)
 
     # last candle data
@@ -67,22 +68,24 @@ def limbian_strategy(state):
         state.last_price_entry = close_price_candle
 
         # price process for open long
-        orderbook_data = get_orderbook_symbol_nobitex(symbol= symbol)
+        orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= symbol)
         last_asks_order = float(orderbook_data["asks"][0][0])
 
         # amount process for open long
         if state.balance >= state.first_balance * state.trade_amount_percent:
             order_cost = state.first_balance * state.trade_amount_percent
-            state.balance -= order_cost
         else:
             order_cost = state.balance
 
         amount = order_cost / last_asks_order
+
         # ---- open long in nobitex ----
-        order_open_long_data = open_order_symbol_nobitex(type= "buy", execution="limit", symbol="btc", amount= amount, price= last_asks_order, id= state.order_code)
+        order_open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol="btc", amount= amount, price= last_asks_order, id= state.order_code)
         # success
         if order_open_long_data is not None:
             increment_order_code(state.order_code)
+            state.balance -= order_cost
+            set_balance_in_db(state.balance)
             print(f"order set: symbol: {order_open_long_data["order"]["srcCurrency"]} price: {order_open_long_data["order"]["price"]} order_size: {order_open_long_data["order"]["amount"]}")
         
         
@@ -100,7 +103,7 @@ def main(state):
     args = parser.parse_args()
 
     # checking for "can be / can't be" trade
-    nobitex_balance = float(symbol_wallet_balance_nobitex(symbol= "usdt"))
+    nobitex_balance = float(nobitex.symbol_wallet_balance_nobitex(symbol= "usdt"))
     if state.balance <= nobitex_balance:
         print(f"Bot needs {state.balance} $ and you have {round(nobitex_balance, 2)} $ so bot can trade")
     else: 
@@ -124,7 +127,7 @@ def main(state):
             # Check if current minute is 0, 15, 30, or 45
             if minute in [0, 15, 30, 45]:
                 # Check if second is 0 to run exactly at the start of minute
-                if now.second == 0:
+                if now.second == 1:
                     limbian_strategy(BOT_STATE)
                     time.sleep(1)  # Sleep 1 second to avoid running multiple times
             time.sleep(0.5)  # Check every 0.5 seconds

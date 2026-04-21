@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # my codes :
 from time_engine import get_current_and_past_timestamps, timestamp_to_datetime
-from database_engine import database_process_symbol_data, get_balance_from_db, set_balance_in_db
+from database_engine import DataBaseEngine
 from nobitex_requests import Nobitex
 from order_code import increment_order_code
 
@@ -23,33 +23,36 @@ SYMBOL = "BTCUSDT"
 symbol = "btc"
 db_file='database.db'
 
-default_balance = 100
+default_balance = 100.0
 open_positions = []
+
+nobitex = Nobitex(NOBITEX_API_KEY)
+db_engine = DataBaseEngine(db_file)
 
 @dataclass
 class BotState_limbian_strategy:
     # settings:
-    balance: float = get_balance_from_db(db_file=db_file, default_balance=default_balance)  # 100
-    first_balance: float = balance
+    balance: float = db_engine.get_balance_from_db(balance_state="balance", default_balance=default_balance)  # 100
+    first_balance: float = db_engine.get_balance_from_db(balance_state="first_balance", default_balance=default_balance)  # 100
     symbol_change_pct: float = 0.06
     more_symbol_change_pct: float = 0.05
     trade_amount_percent: float = 0.10
     max_open_trades: int = 10
 
     # variables
-    last_price_entry: float = 0.0
-    order_code: int = "order00001"
+    last_price_entry: float = db_engine.get_variable_from_db(var_name='last_price_entry', default_value=0.0)
+    order_code: str = db_engine.get_variable_from_db(var_name='order_code', default_value="order00001")
 
 BOT_STATE = BotState_limbian_strategy()
 
-nobitex = Nobitex(NOBITEX_API_KEY)
+
 
 # main limbian_strategy
 def limbian_strategy(state):
     # get symbol data and save on database
     current_ts, past_ts = get_current_and_past_timestamps(days_ago=1)
     symbol_ohlcv_data = nobitex.get_market_history_symbol_nobitex(symbol= SYMBOL, fromm= past_ts, to= current_ts)
-    database_process_symbol_data(data=symbol_ohlcv_data, db_file=db_file, symbol=SYMBOL)
+    db_engine.database_process_symbol_data(data=symbol_ohlcv_data, symbol=SYMBOL)
 
     # last candle data
     open_time_candle = timestamp_to_datetime(symbol_ohlcv_data["t"][-2])
@@ -62,11 +65,14 @@ def limbian_strategy(state):
 
     if state.last_price_entry <= close_price_candle:
         state.last_price_entry = close_price_candle
+        db_engine.set_variable_in_db(var_name='last_price_entry', new_value=close_price_candle)
+
 
     # ===================== OPEN LONG =====================
     if (close_price_candle <= state.last_price_entry * (1 - state.symbol_change_pct)) and (len(open_positions) < state.max_open_trades):
 
         state.last_price_entry = close_price_candle
+        db_engine.set_variable_in_db(var_name='last_price_entry', new_value=close_price_candle)
 
         # price process for open long
         orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= SYMBOL)
@@ -81,14 +87,19 @@ def limbian_strategy(state):
 
         # ---- open long in nobitex ----
         order_open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol=symbol, amount= amount, price= last_asks_order, id= state.order_code)
+        time.sleep(1)
         # success
         if order_open_long_data is not None:
-            increment_order_code(state.order_code)
+            # order code +1 number
+            state.order_code = increment_order_code(state.order_code)
+            db_engine.set_variable_in_db(var_name='order_code', new_value=state.order_code)
+            # balance decrease
             state.balance -= order_cost
-            set_balance_in_db(state.balance)
-            print(f"order set: symbol: {order_open_long_data["order"]["srcCurrency"]} price: {order_open_long_data["order"]["price"]} order_size: {order_open_long_data["order"]["amount"]}")
-        # inset opened positions in database
-        
+            db_engine.set_balance_in_db(balance_state="balance", new_value=state.balance)
+            # print
+            print(f"order set: {order_open_long_data["order"]["srcCurrency"]} price: {order_open_long_data["order"]["price"]} order_size: {order_open_long_data["order"]["amount"]} | {order_open_long_data["order"]["totalOrderPrice"]}")
+            # inset opened positions in database
+            db_engine.save_order_to_db(order_open_long_data, status= "OPEN")
     
 
 
@@ -110,13 +121,10 @@ def main(state):
 
     if args.test:
         # Test mode: run once immediately
-        print("Test mode: Running strategy once...")
         limbian_strategy(BOT_STATE)
-        print("Strategy execution completed.")
     else:
         # Normal mode: run at 0, 15, 30, 45 minutes
         print("Scheduled mode: Running strategy every 15 minutes at 0, 15, 30, 45")
-        print("Waiting for next scheduled time...")
         
         while True:
             now = datetime.now()

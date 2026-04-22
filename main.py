@@ -21,10 +21,10 @@ NOBITEX_API_KEY = os.getenv('NOBITEX_API_KEY')
 
 SYMBOL = "BTCUSDT"
 symbol = "btc"
+market_symbol = "BTC-USDT"
 db_file='database.db'
 
 default_balance = 100.0
-open_positions = []
 
 nobitex = Nobitex(NOBITEX_API_KEY)
 db_engine = DataBaseEngine(db_file)
@@ -68,6 +68,7 @@ def limbian_strategy(state):
         db_engine.set_variable_in_db(var_name='last_price_entry', new_value=close_price_candle)
 
 
+
     # ===================== OPEN LONG =====================
     if (close_price_candle <= state.last_price_entry * (1 - state.symbol_change_pct)) and (len(open_positions) < state.max_open_trades):
 
@@ -86,10 +87,10 @@ def limbian_strategy(state):
         amount = order_cost / last_asks_order
 
         # ---- open long in nobitex ----
-        order_open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol=symbol, amount= amount, price= last_asks_order, id= state.order_code)
+        open_long_data = nobitex.set_order_symbol_nobitex(type= "buy", execution="limit", symbol=symbol, amount= amount, price= last_asks_order, id= state.order_code)
         time.sleep(1)
         # success
-        if order_open_long_data is not None:
+        if open_long_data['status'] == "ok":
             # order code +1 number
             state.order_code = increment_order_code(state.order_code)
             db_engine.set_variable_in_db(var_name='order_code', new_value=state.order_code)
@@ -97,10 +98,50 @@ def limbian_strategy(state):
             state.balance -= order_cost
             db_engine.set_balance_in_db(balance_state="balance", new_value=state.balance)
             # print
-            print(f"order set: {order_open_long_data["order"]["srcCurrency"]} price: {order_open_long_data["order"]["price"]} order_size: {order_open_long_data["order"]["amount"]} | {order_open_long_data["order"]["totalOrderPrice"]}")
+            print(f"BUY order set: {open_long_data["order"]["srcCurrency"]} price: {open_long_data["order"]["price"]} order_size: {open_long_data["order"]["amount"]} | {open_long_data["order"]["totalOrderPrice"]}")
             # inset opened positions in database
-            db_engine.save_order_to_db(order_open_long_data, status= "OPEN")
+            db_engine.save_order_to_db(open_long_data, status= "OPEN")
+        
+        else:
+            print("Your Open_Order Failed")
+
+        open_long_data = None
+        
+
     
+
+    open_positions = db_engine.load_open_positions(market=market_symbol)
+
+    # ===================== CLOSE LONG =====================
+    for p in open_positions:
+        if p['price'] * (1 + state.symbol_change_pct + state.more_symbol_change_pct) <= close_price_candle:
+            # price process for open long
+            orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= SYMBOL)
+            last_bids_order = float(orderbook_data["bids"][0][0])
+
+            # amount process for open long
+            amount = p['amount']
+
+            # ---- close long in nobitex ----
+            close_long_data = nobitex.set_order_symbol_nobitex(type= "sell", execution="limit", symbol=symbol, amount= amount, price= last_bids_order, id= state.order_code)
+            time.sleep(1)
+            # success
+            if close_long_data['status'] == "ok":
+                # order code +1 number
+                state.order_code = increment_order_code(state.order_code)
+                db_engine.set_variable_in_db(var_name='order_code', new_value=state.order_code)
+                # balance decrease
+                state.balance += p['total_order_price']
+                db_engine.set_balance_in_db(balance_state="balance", new_value=state.balance)
+                # print
+                print(f"SELL order set: {close_long_data["order"]["srcCurrency"]} price: {close_long_data["order"]["price"]} order_size: {close_long_data["order"]["amount"]} | {close_long_data["order"]["totalOrderPrice"]}")
+                # CLOSE opened positions in database
+                db_engine.close_order_in_db(client_order_id= p['client_order_id'], status= "CLOSE")
+            
+            else:
+                print("Your CLOSE_Order Failed")
+
+            close_long_data = None
 
 
 # ==== MIAN ====

@@ -361,5 +361,131 @@ class DataBaseEngine:
         # print(f"Variable '{var_name}' updated to: {new_value}")
         return new_value
 
+
+    # load open positions
+    def load_open_positions(self, market=None):
+        """
+        Load all open positions from orders table where status is 'OPEN'.
+        
+        Args:
+            market (str, optional): Filter by market (e.g., 'BTC-USDT')
+        
+        Returns:
+            list: List of dictionaries containing open positions
+        """
+        import sqlite3
+        
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        # Check if orders table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            print("⚠️ Orders table does not exist. Creating it now...")
+            # Create orders table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS orders (
+                    order_id INTEGER PRIMARY KEY,
+                    order_type TEXT,
+                    market TEXT,
+                    price REAL,
+                    amount REAL,
+                    total_order_price REAL,
+                    client_order_id TEXT,
+                    created_at TEXT,
+                    status TEXT
+                )
+            ''')
+            conn.commit()
+            print("✓ Orders table created successfully.")
+            conn.close()
+            return []  # Return empty list since no positions exist
+        
+        if market:
+            cursor.execute('''
+            SELECT order_id, order_type, market, price, amount, total_order_price, client_order_id, created_at, status
+            FROM orders
+            WHERE status = 'OPEN' AND market = ?
+            ORDER BY created_at DESC
+            ''', (market,))
+        else:
+            cursor.execute('''
+            SELECT order_id, order_type, market, price, amount, total_order_price, client_order_id, created_at, status
+            FROM orders
+            WHERE status = 'OPEN'
+            ORDER BY created_at DESC
+            ''')
+        
+        positions_data = cursor.fetchall()
+        conn.close()
+        
+        # Convert each position to dictionary
+        positions = []
+        for pos in positions_data:
+            position_dict = {
+                'order_id': pos[0],
+                'order_type': pos[1],
+                'market': pos[2],
+                'price': pos[3],
+                'amount': pos[4],
+                'total_order_price': pos[5],
+                'client_order_id': pos[6],
+                'created_at': pos[7],
+                'status': pos[8]
+            }
+            positions.append(position_dict)
+        
+        return positions
+
+
+    # order id --> status=CLOSE in database
+    def close_order_in_db(self, client_order_id, status="CLOSE"):
+        """
+        Close an order in database by updating its status to CLOSE.
+        
+        Args:
+            client_order_id (str): The client order ID of the order to close
+            status (str): The status to set (default: "CLOSE")
+        
+        Returns:
+            bool: True if order was found and updated, False otherwise
+        """
+        import sqlite3
+        
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        # First check if order exists
+        cursor.execute('''
+        SELECT order_id, client_order_id, status 
+        FROM orders 
+        WHERE client_order_id = ?
+        ''', (client_order_id,))
+        
+        order = cursor.fetchone()
+        
+        if order is None:
+            print(f"Order with client_order_id '{client_order_id}' not found.")
+            conn.close()
+            return False
+        
+        # Update the status to CLOSE
+        cursor.execute('''
+        UPDATE orders 
+        SET status = ?
+        WHERE client_order_id = ?
+        ''', (status, client_order_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # print(f"Order {order[0]} (client_order_id: {client_order_id}) status updated to: {status}")
+        return True
+
+
+# # TEST
 # db_engine = DataBaseEngine(db_file='database.db')
-# db_engine.get_variable_from_db(var_name='last_price_entry', default_value=0.0, db_file='database.db')
+# db_engine.close_order_in_db(client_order_id="order00004")
+# positions = db_engine.load_open_positions()

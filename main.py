@@ -98,7 +98,7 @@ def limbian_strategy(state):
             state.balance -= order_cost
             db_engine.set_balance_in_db(balance_state="balance", new_value=state.balance)
             # print
-            print(f"BUY order set: {open_long_data["order"]["srcCurrency"]} price: {open_long_data["order"]["price"]} order_size: {open_long_data["order"]["amount"]} | {open_long_data["order"]["totalOrderPrice"]}")
+            print(f"BUY order set: {open_long_data["order"]["srcCurrency"]} price: {open_long_data["order"]["price"]} order_size: {open_long_data["order"]["amount"]} | {open_long_data["order"]["totalOrderPrice"]}$")
             # inset opened positions in database
             db_engine.save_order_to_db(open_long_data, status= "OPEN")
         
@@ -106,20 +106,20 @@ def limbian_strategy(state):
             print("Your Open_Order Failed")
 
         open_long_data = None
-        
+    # ======================================================
 
     
-
     open_positions = db_engine.load_open_positions(market=market_symbol)
+
 
     # ===================== CLOSE LONG =====================
     for p in open_positions:
         if p['price'] * (1 + state.symbol_change_pct + state.more_symbol_change_pct) <= close_price_candle:
-            # price process for open long
+            # price process for close long
             orderbook_data = nobitex.get_orderbook_symbol_nobitex(symbol= SYMBOL)
             last_bids_order = float(orderbook_data["bids"][0][0])
 
-            # amount process for open long
+            # amount process for close long
             amount = p['amount']
 
             # ---- close long in nobitex ----
@@ -130,19 +130,20 @@ def limbian_strategy(state):
                 # order code +1 number
                 state.order_code = increment_order_code(state.order_code)
                 db_engine.set_variable_in_db(var_name='order_code', new_value=state.order_code)
-                # balance decrease
-                state.balance += p['total_order_price']
+                # balance increase
+                state.balance += close_long_data["order"]["totalOrderPrice"]
                 db_engine.set_balance_in_db(balance_state="balance", new_value=state.balance)
                 # print
-                print(f"SELL order set: {close_long_data["order"]["srcCurrency"]} price: {close_long_data["order"]["price"]} order_size: {close_long_data["order"]["amount"]} | {close_long_data["order"]["totalOrderPrice"]}")
+                print(f"SELL order set: {close_long_data["order"]["srcCurrency"]} price: {close_long_data["order"]["price"]} order_size: {close_long_data["order"]["amount"]} | {close_long_data["order"]["totalOrderPrice"]}$")
                 # CLOSE opened positions in database
                 db_engine.close_order_in_db(client_order_id= p['client_order_id'], status= "CLOSE")
-            
+                # Remove From open_positions
+                open_positions.remove(p)
             else:
                 print("Your CLOSE_Order Failed")
 
             close_long_data = None
-
+    # ======================================================
 
 # ==== MIAN ====
 def main(state):
